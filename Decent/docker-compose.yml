@@ -1,0 +1,36 @@
+﻿version: "3.7"
+services:
+
+  decent:
+    image: decent
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+     - "8000:80"
+    depends_on:
+     - "postgres"
+    networks:
+      - decent-dev
+
+
+  postgres:
+    image: postgres
+    ports:
+    - "5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: decent
+    volumes:
+    - db_volume:/var/lib/postgresql/data
+    networks:
+      - decent-dev
+    
+
+networks:
+  decent-dev:
+    driver: bridge
+
+volumes:
+  db_volume:
