@@ -24,8 +24,5 @@ namespace Decent.Data
             builder.Entity<IdentityRoleClaim<string>>().ToTable("RoleClaims");
             builder.Entity<IdentityUserToken<string>>().ToTable("UserTokens");
         }
-
-        public DbSet<House> Houses { get; set; }
-        public DbSet<Chores> Chores { get; set; }
     }
 }
