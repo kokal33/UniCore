@@ -7,8 +7,12 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Decent.Models;
-using Microsoft.AspNetCore.Identity.UI.Services;
 using Decent.PartialModels;
+using System.Security.Claims;
+using System;
+using System.Text;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 
 namespace Decent.Controllers
 {
@@ -16,18 +20,18 @@ namespace Decent.Controllers
     {
         private readonly UserManager<User> _userManager;
         private readonly SignInManager<User> _signInManager;
-        private readonly IEmailSender _emailSender;
+        //  private readonly IEmailSender _emailSender;
         private readonly ILogger _logger;
 
         public AccountController(
             UserManager<User> userManager,
             SignInManager<User> signInManager,
-            IEmailSender emailSender,
+            //   IEmailSender emailSender,
             ILoggerFactory loggerFactory)
         {
             _userManager = userManager;
             _signInManager = signInManager;
-            _emailSender = emailSender;
+            //   _emailSender = emailSender;
             _logger = loggerFactory.CreateLogger<AccountController>();
         }
 
@@ -36,32 +40,39 @@ namespace Decent.Controllers
         [AllowAnonymous]
         public async Task<IActionResult> Login([FromBody]LoginModel model)
         {
-            if (ModelState.IsValid)
+            // This doesn't count login failures towards account lockout
+            // To enable password failures to trigger account lockout, set lockoutOnFailure: true
+            var user = await _userManager.FindByNameAsync(model.Username);
+            if (user != null && await _userManager.CheckPasswordAsync(user, model.Password))
             {
-                // This doesn't count login failures towards account lockout
-                // To enable password failures to trigger account lockout, set lockoutOnFailure: true
-                var result = await _signInManager.PasswordSignInAsync(model.Username, model.Password, model.RememberMe, lockoutOnFailure: false);
-                if (result.Succeeded)
+
+                var authClaims = new[]
                 {
-                    _logger.LogInformation(1, "User logged in.");
-                    return Ok(result);
-                }
-                if (result.RequiresTwoFactor)
+                    new Claim(ClaimTypes.Name, model.Username),
+                    new Claim(JwtRegisteredClaimNames.Sub, user.UserName),
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
+                };
+
+                var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("Ju57Fun53cr37-K3y"));
+
+                var token = new JwtSecurityToken(
+                    issuer: "JustFun",
+                    audience: "JustFun",
+                    expires: DateTime.Now.AddHours(3),
+                    claims: authClaims,
+                    signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
+                   );
+                //var result = await _signInManager.PasswordSignInAsync(model.Username, model.Password, model.RememberMe, lockoutOnFailure: false);
+                return Ok(new
                 {
-                    _logger.LogWarning(2, "Requires Two Factor auth");
-                }
-                if (result.IsLockedOut)
-                {
-                    _logger.LogWarning(2, "User account locked out.");
-                }
-                else
-                {
-                    ModelState.AddModelError(string.Empty, "Invalid login attempt.");
-                }
+                    //   result,
+                    token = new JwtSecurityTokenHandler().WriteToken(token),
+                    expiration = token.ValidTo
+                });
             }
 
-            // If we got this far, something failed, redisplay form
-            return null;
+            // If we got this far, something failed
+            return Unauthorized();
         }
 
         // POST: /Account/Register
@@ -71,7 +82,7 @@ namespace Decent.Controllers
         {
             if (ModelState.IsValid)
             {
-                var user = new User { UserName = model.Email, Email = model.Email };
+                var user = new User { UserName = model.Username, Email = model.Email };
                 var result = await _userManager.CreateAsync(user, model.Password);
                 if (result.Succeeded)
                 {
@@ -88,7 +99,7 @@ namespace Decent.Controllers
                 AddErrors(result);
             }
 
-            // If we got this far, something failed, redisplay form
+            // If we got this far, something failed
             return BadRequest();
         }
 
@@ -118,7 +129,8 @@ namespace Decent.Controllers
                 return BadRequest("UserId is not valid");
             }
             var result = await _userManager.ConfirmEmailAsync(user, code);
-            return result.Succeeded ? (IActionResult)Ok() : BadRequest();
+            ViewData["Confirmed"] = result.Succeeded;
+            return View();
         }
 
         //
@@ -130,7 +142,7 @@ namespace Decent.Controllers
         {
             if (ModelState.IsValid)
             {
-                var user = await _userManager.FindByNameAsync(model.Email);
+                var user = await _userManager.FindByEmailAsync(model.Email);
                 if (user == null || !(await _userManager.IsEmailConfirmedAsync(user)))
                 {
                     // Don't reveal that the user does not exist or is not confirmed
@@ -139,15 +151,15 @@ namespace Decent.Controllers
 
                 //For more information on how to enable account confirmation and password reset please visit http://go.microsoft.com/fwlink/?LinkID=532713
                 //Send an email with this link
-               var code = await _userManager.GeneratePasswordResetTokenAsync(user);
-                var callbackUrl = Url.Action("ResetPassword", "Account", new { userId = user.Id, code = code }, protocol: HttpContext.Request.Scheme);
-                await _emailSender.SendEmailAsync(model.Email, "Reset Password",
-                   $"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>");
-                return View("ForgotPasswordConfirmation");
+                var code = await _userManager.GeneratePasswordResetTokenAsync(user);
+                var callbackUrl = Url.Action("ResetPassword", "Account", new { userId = user.Id, code }, protocol: HttpContext.Request.Scheme);
+                //     await _emailSender.SendEmailAsync(model.Email, "Reset Password",
+                //      $"Please reset your password by clicking here: <a href='{callbackUrl}'>link</a>");
+                return Ok();
             }
 
-            // If we got this far, something failed, redisplay form
-            return View(model);
+            // If we got this far, something failed
+            return Conflict();
         }
 
         ////
@@ -168,9 +180,9 @@ namespace Decent.Controllers
         {
             if (!ModelState.IsValid)
             {
-                return View(model);
+                return BadRequest();
             }
-            var user = await _userManager.FindByNameAsync(model.Email);
+            var user = await _userManager.FindByEmailAsync(model.Email);
             if (user == null)
             {
                 // Don't reveal that the user does not exist
