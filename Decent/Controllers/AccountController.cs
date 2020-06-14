@@ -53,11 +53,11 @@ namespace Decent.Controllers
                     new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
                 };
 
-                var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("Ju57Fun53cr37-K3y"));
+                var authSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("!Asterisk-k3y"));
 
                 var token = new JwtSecurityToken(
-                    issuer: "JustFun",
-                    audience: "JustFun",
+                    issuer: "Asterisk doo",
+                    audience: "Asterisk",
                     expires: DateTime.Now.AddHours(3),
                     claims: authClaims,
                     signingCredentials: new SigningCredentials(authSigningKey, SecurityAlgorithms.HmacSha256)
